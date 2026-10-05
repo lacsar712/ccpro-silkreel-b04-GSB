@@ -58,6 +58,33 @@ button, input {
   margin: 4px 6px 4px 0;
 }
 .err { color: #b42318; }
+.ok { color: #3c6e47; }
 .hint { color: #6b5a48; font-size: 0.92em; }
 label { display: block; margin: 8px 0; }
-.topbar { display: flex; justify-content: space-between; align-items: baseline; }
+.topbar { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.topnav { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.topnav a {
+  padding: 8px 12px;
+  border: 1px solid #cbb375;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink);
+  background: #fbf6e9;
+}
+.topnav a.active { background: var(--gold); color: #fff; border-color: var(--gold); }
+.note-editor { margin-top: 6px; }
+.note-editor textarea {
+  width: 100%;
+  font: inherit;
+  padding: 8px 10px;
+  margin: 4px 0;
+  border: 1px solid #d8c9a4;
+  border-radius: 8px;
+  resize: vertical;
+}
+.note-count { color: #6b5a48; font-size: 0.9em; margin: 2px 0 6px; }
+hr { border: none; border-top: 1px dashed #d8c9a4; margin: 12px 0; }
+.notes-page { margin-top: 20px; }
+.note-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.note-tabs .tab { border: 1px solid #cbb375; background: #fbf6e9; border-radius: 8px; }
+.note-tabs .tab.active { background: var(--gold); color: #fff; border-color: var(--gold); }

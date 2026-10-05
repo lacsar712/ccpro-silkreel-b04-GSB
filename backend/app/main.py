@@ -5,7 +5,7 @@ from app.db import SessionLocal
 from app.models import Basin
 from app.repositories import BasinRepo, UserRepo
 from app.security import make_token, parse_token, verify_password
-from app.services import RuleError, assert_can_set_status, latest_temp
+from app.services import RuleError, assert_can_set_status, latest_temp, validate_note
 
 app = Quart(__name__)
 
@@ -72,6 +72,7 @@ def _basin_json(basin: Basin) -> dict:
         "ringIndex": basin.ring_index,
         "latestTempC": latest_temp(basin),
         "readingCount": len(basin.readings or []),
+        "notes": basin.notes or "",
     }
 
 
@@ -129,5 +130,28 @@ async def set_status(basin_id: int):
         except RuleError as exc:
             return jsonify({"detail": str(exc)}), 400
         await repo.save_status(basin, status)
+        basin = await repo.get(basin_id)
+        return _basin_json(basin)
+
+
+@app.route("/api/basins/<int:basin_id>/notes", methods=["POST"])
+async def save_note(basin_id: int):
+    denied = require_user()
+    if denied:
+        return denied
+    body = await request.get_json(force=True)
+    note = (body or {}).get("notes")
+    note = note if isinstance(note, str) else ""
+    # 规矩是落库闸门：先校验、后写库。打回的笔记不产生任何数据库改动。
+    try:
+        validate_note(note)
+    except RuleError as exc:
+        return jsonify({"detail": str(exc)}), 400
+    async with SessionLocal() as session:
+        repo = BasinRepo(session)
+        basin = await repo.get(basin_id)
+        if basin is None:
+            return jsonify({"detail": "盆不存在"}), 404
+        await repo.save_note(basin, note)
         basin = await repo.get(basin_id)
         return _basin_json(basin)

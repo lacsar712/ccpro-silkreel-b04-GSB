@@ -44,3 +44,7 @@ class BasinRepo:
     async def save_status(self, basin: Basin, status: str) -> None:
         basin.status = status
         await self.session.commit()
+
+    async def save_note(self, basin: Basin, note: str) -> None:
+        basin.notes = note
+        await self.session.commit()
