@@ -34,6 +34,15 @@ class BasinRepo:
         )
         return result.scalar_one_or_none()
 
+    async def get_for_update(self, basin_id: int) -> Basin | None:
+        result = await self.session.execute(
+            select(Basin)
+            .options(selectinload(Basin.readings))
+            .where(Basin.id == basin_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def add_reading(self, basin: Basin, temp_c: float, operator: str) -> BathReading:
         row = BathReading(basin=basin, water_temp_c=temp_c, operator=operator)
         self.session.add(row)
@@ -43,4 +52,8 @@ class BasinRepo:
 
     async def save_status(self, basin: Basin, status: str) -> None:
         basin.status = status
+        await self.session.commit()
+
+    async def save_note(self, basin: Basin, note: str) -> None:
+        basin.notes = note
         await self.session.commit()

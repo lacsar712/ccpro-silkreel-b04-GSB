@@ -4,6 +4,13 @@ import { api, clearToken, setToken, token } from "./api.js";
 import "./app.css";
 
 const STATUS_LABEL = { soaking: "浸茧", reeling: "缫丝中", reeled: "已缫完" };
+const NOTE_MIN = 8;
+const NOTE_MAX = 40;
+const NOTE_PHRASE = "东津渡";
+
+function countHanzi(text) {
+  return (text.match(/[一-鿿]/g) || []).length;
+}
 
 function Login({ onOk }) {
   const [username, setUsername] = useState("admin");
@@ -44,31 +51,55 @@ function Login({ onOk }) {
   );
 }
 
-function Yard() {
-  const [board, setBoard] = useState(null);
-  const [picked, setPicked] = useState(null);
-  const [temp, setTemp] = useState("40");
+function NoteEditor({ basin, refresh }) {
+  const [text, setText] = useState(basin.note || "");
+  const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const hanzi = countHanzi(text);
+  const hasPhrase = text.includes(NOTE_PHRASE);
 
-  async function refresh() {
-    const data = await api("/api/board");
-    setBoard(data);
-    if (picked) {
-      setPicked(data.basins.find((b) => b.id === picked.id) || data.basins[0]);
+  async function save() {
+    setMsg("");
+    setErr("");
+    try {
+      await api(`/api/basins/${basin.id}/note`, {
+        method: "POST",
+        body: JSON.stringify({ note: text }),
+      });
+      await refresh();
+      setMsg("已落库");
+    } catch (ex) {
+      setErr(ex.message);
     }
   }
 
-  useEffect(() => {
-    refresh().catch((e) => setErr(e.message));
-  }, []);
+  return (
+    <div class="note-editor">
+      <textarea
+        rows="3"
+        value={text}
+        placeholder={`盆笔记须 ${NOTE_MIN}～${NOTE_MAX} 个汉字，且正文含「${NOTE_PHRASE}」`}
+        onInput={(e) => {
+          setText(e.target.value);
+          setMsg("");
+          setErr("");
+        }}
+      />
+      <p class="hint">
+        汉字 {hanzi} / {NOTE_MIN}～{NOTE_MAX}
+        {hasPhrase ? "" : ` · 缺「${NOTE_PHRASE}」`}
+      </p>
+      <button onClick={save}>存笔记</button>
+      {err && <p class="err">{err}</p>}
+      {msg && <p class="ok">{msg}</p>}
+    </div>
+  );
+}
 
-  if (!board) {
-    return (
-      <div class="yard">
-        {err || "装载环盆…"}
-      </div>
-    );
-  }
+function Yard({ board, refresh }) {
+  const [picked, setPicked] = useState(null);
+  const [temp, setTemp] = useState("40");
+  const [err, setErr] = useState("");
 
   const n = board.basins.length;
   async function writeTemp() {
@@ -99,21 +130,7 @@ function Yard() {
   }
 
   return (
-    <div class="yard">
-      <div class="topbar">
-        <div>
-          <h1>{board.filature}</h1>
-          <p>{board.riverside} · 点盆登记汤温；已缫完须最近汤温 38～42℃</p>
-        </div>
-        <button
-          onClick={() => {
-            clearToken();
-            location.reload();
-          }}
-        >
-          退出
-        </button>
-      </div>
+    <div>
       <div class="ring">
         {board.basins.map((b, i) => {
           const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -137,7 +154,9 @@ function Yard() {
           <h3>
             {picked.code} · {STATUS_LABEL[picked.status]}
           </h3>
-          <p>最近汤温：{picked.latestTempC ?? "无"} ℃ · 记录 {picked.readingCount} 次</p>
+          <p>
+            最近汤温：{picked.latestTempC ?? "无"} ℃ · 记录 {picked.readingCount} 次
+          </p>
           <input value={temp} onInput={(e) => setTemp(e.target.value)} />
           <button onClick={writeTemp}>登记汤温</button>
           <div>
@@ -146,7 +165,79 @@ function Yard() {
             <button onClick={() => setStatus("reeled")}>已缫完</button>
           </div>
           {err && <p class="err">{err}</p>}
+          <h4>盆笔记</h4>
+          <NoteEditor key={picked.id} basin={picked} refresh={refresh} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function NotesPage({ board, refresh }) {
+  return (
+    <div class="notes-page">
+      <p class="hint">
+        各盆笔记同一套规矩：{NOTE_MIN}～{NOTE_MAX} 个汉字，正文须含「{NOTE_PHRASE}」，缺一样整笔打回。
+      </p>
+      {board.basins.map((b) => (
+        <div class="note-card" key={b.id}>
+          <h3>
+            {b.code} · {STATUS_LABEL[b.status]}
+          </h3>
+          <NoteEditor basin={b} refresh={refresh} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Workspace() {
+  const [board, setBoard] = useState(null);
+  const [view, setView] = useState("yard");
+  const [err, setErr] = useState("");
+
+  async function refresh() {
+    const data = await api("/api/board");
+    setBoard(data);
+    return data;
+  }
+
+  useEffect(() => {
+    refresh().catch((e) => setErr(e.message));
+  }, []);
+
+  if (!board) {
+    return <div class="yard">{err || "装载环盆…"}</div>;
+  }
+
+  return (
+    <div class="yard">
+      <div class="topbar">
+        <div>
+          <h1>{board.filature}</h1>
+          <p>{board.riverside} · 点盆登记汤温；已缫完须最近汤温 38～42℃</p>
+        </div>
+        <nav class="tabs">
+          <button class={view === "yard" ? "active" : ""} onClick={() => setView("yard")}>
+            环盆作业台
+          </button>
+          <button class={view === "notes" ? "active" : ""} onClick={() => setView("notes")}>
+            盆笔记
+          </button>
+          <button
+            onClick={() => {
+              clearToken();
+              location.reload();
+            }}
+          >
+            退出
+          </button>
+        </nav>
+      </div>
+      {view === "yard" ? (
+        <Yard board={board} refresh={refresh} />
+      ) : (
+        <NotesPage board={board} refresh={refresh} />
       )}
     </div>
   );
@@ -154,7 +245,7 @@ function Yard() {
 
 function App() {
   const [ready, setReady] = useState(Boolean(token()));
-  return ready ? <Yard /> : <Login onOk={() => setReady(true)} />;
+  return ready ? <Workspace /> : <Login onOk={() => setReady(true)} />;
 }
 
 render(<App />, document.getElementById("app"));
